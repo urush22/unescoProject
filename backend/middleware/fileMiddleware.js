@@ -1,6 +1,5 @@
 const fs = require('fs').promises;
 const path = require('path');
-const sharp = require('sharp');
 
 /**
  * Validate uploaded file
@@ -51,22 +50,23 @@ const validateFile = async (req, res, next) => {
       });
     }
 
-    // Additional validation for images using sharp
+    // Basic file validation for images (without sharp)
     if (file.mimetype.startsWith('image/')) {
       try {
-        const metadata = await sharp(file.path).metadata();
-        
-        // Check image dimensions (reasonable limits)
-        if (metadata.width > 8000 || metadata.height > 8000) {
+        // Basic file size check for images
+        if (file.size < 100) { // Too small to be a valid image
           await cleanupFile(file.path);
           return res.status(400).json({
             success: false,
-            message: 'Image dimensions too large. Maximum size is 8000x8000 pixels.'
+            message: 'File appears to be corrupted or invalid.'
           });
         }
         
-        // Check for valid image format
-        if (!metadata.format) {
+        // Basic file header check
+        const buffer = await fs.readFile(file.path);
+        const isValidImage = isValidImageBuffer(buffer, file.mimetype);
+        
+        if (!isValidImage) {
           await cleanupFile(file.path);
           return res.status(400).json({
             success: false,
@@ -114,6 +114,27 @@ const validateFile = async (req, res, next) => {
       success: false,
       message: 'Error validating file'
     });
+  }
+};
+
+/**
+ * Basic image validation using file headers (magic numbers)
+ */
+const isValidImageBuffer = (buffer, mimetype) => {
+  if (buffer.length < 4) return false;
+
+  const header = buffer.toString('hex', 0, 4).toUpperCase();
+  
+  switch (mimetype) {
+    case 'image/jpeg':
+      return header.startsWith('FFD8');
+    case 'image/png':
+      return header.startsWith('8950');
+    case 'image/webp':
+      return buffer.toString('ascii', 0, 4) === 'RIFF' && 
+             buffer.toString('ascii', 8, 12) === 'WEBP';
+    default:
+      return true; // Allow other types to pass basic validation
   }
 };
 
