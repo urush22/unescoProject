@@ -69,121 +69,62 @@ export default function DeepfakeDetectionPage() {
     }
   }
 
-  const handleFileUpload = (file: File) => {
+  const handleFileUpload = async (file: File) => {
     setUploadedFile(file)
     setStatus("uploading")
     setProgress(0)
 
-    // Simulate upload progress
-    const uploadInterval = setInterval(() => {
-      setProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(uploadInterval)
-          startProcessing()
-          return 100
-        }
-        return prev + 10
+    try {
+      // Create FormData for file upload
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('detectionType', detectionType)
+
+      // Simulate upload progress
+      const uploadInterval = setInterval(() => {
+        setProgress((prev) => {
+          if (prev >= 90) {
+            clearInterval(uploadInterval)
+            return 90
+          }
+          return prev + 10
+        })
+      }, 200)
+
+      // Call the backend API
+      const response = await fetch('http://localhost:5000/api/deepfake/detect', {
+        method: 'POST',
+        body: formData,
       })
-    }, 200)
-  }
 
-  const startProcessing = () => {
-    setStatus("processing")
-    setProgress(0)
+      clearInterval(uploadInterval)
+      setProgress(100)
+      setStatus("processing")
 
-    // Simulate processing with realistic timing
-    const processingInterval = setInterval(() => {
-      setProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(processingInterval)
-          generateResult()
-          return 100
-        }
-        return prev + 5
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.message || 'Detection failed')
+      }
+
+      // Set the analysis result
+      setAnalysisResult({
+        result: result.result,
+        confidence: result.confidence,
+        details: result.details,
+        processingTime: result.processingTime,
       })
-    }, 300)
-  }
+      setStatus("complete")
 
-  const generateResult = () => {
-    // Simulate different results based on file type and random factors
-    const results: DetectionResult[] = ["authentic", "deepfake", "suspicious"]
-    const randomResult = results[Math.floor(Math.random() * results.length)]
-    const confidence = Math.floor(Math.random() * 30) + 70 // 70-99%
-    const processingTime = Math.floor(Math.random() * 5) + 3 // 3-8 seconds
-
-    let details: string[] = []
-
-    if (detectionType === "image") {
-      if (randomResult === "deepfake") {
-        details = [
-          "Inconsistent lighting patterns detected",
-          "Facial feature misalignment found",
-          "Unnatural skin texture artifacts",
-          "Pixel-level manipulation signatures",
-        ]
-      } else if (randomResult === "suspicious") {
-        details = [
-          "Minor compression artifacts detected",
-          "Slight color inconsistencies in facial region",
-          "Requires manual verification",
-        ]
-      } else {
-        details = [
-          "Natural facial features and expressions",
-          "Consistent lighting and shadows",
-          "No manipulation artifacts detected",
-          "Authentic metadata signatures",
-        ]
-      }
-    } else if (detectionType === "video") {
-      if (randomResult === "deepfake") {
-        details = [
-          "Temporal inconsistencies between frames",
-          "Unnatural blinking patterns",
-          "Lip-sync misalignment detected",
-          "Frame-to-frame facial distortions",
-        ]
-      } else if (randomResult === "suspicious") {
-        details = [
-          "Minor temporal artifacts detected",
-          "Slight motion blur inconsistencies",
-          "Requires extended analysis",
-        ]
-      } else {
-        details = [
-          "Natural facial movements and expressions",
-          "Consistent temporal flow",
-          "Authentic motion patterns",
-          "No frame manipulation detected",
-        ]
-      }
-    } else {
-      if (randomResult === "deepfake") {
-        details = [
-          "Synthetic voice patterns detected",
-          "Unnatural speech rhythm",
-          "Audio compression artifacts",
-          "Voice cloning signatures found",
-        ]
-      } else if (randomResult === "suspicious") {
-        details = ["Minor audio processing detected", "Slight spectral inconsistencies", "Requires audio expert review"]
-      } else {
-        details = [
-          "Natural speech patterns",
-          "Consistent audio quality",
-          "No synthetic voice indicators",
-          "Authentic recording characteristics",
-        ]
-      }
+    } catch (error) {
+      console.error('Detection error:', error)
+      setStatus("idle")
+      setProgress(0)
+      setUploadedFile(null)
+      
+      // You might want to show an error message to the user here
+      alert(error instanceof Error ? error.message : 'Failed to process file. Please try again.')
     }
-
-    setAnalysisResult({
-      result: randomResult,
-      confidence,
-      details,
-      processingTime,
-    })
-    setStatus("complete")
   }
 
   const resetDetection = () => {
