@@ -21,6 +21,11 @@ class DeepfakeService {
         enabled: !!process.env.SENSITY_API_KEY,
         apiKey: process.env.SENSITY_API_KEY,
         baseUrl: 'https://api.sensity.ai/v1'
+      },
+      hive: {
+        enabled: !!process.env.HIVE_API_KEY,
+        apiKey: process.env.HIVE_API_KEY,
+        baseUrl: 'https://api.thehive.ai/api/v2'
       }
     };
   }
@@ -71,6 +76,8 @@ class DeepfakeService {
         return await this.detectWithDeepware(filePath, detectionType);
       case 'sensity':
         return await this.detectWithSensity(filePath, detectionType);
+      case 'hive':
+        return await this.detectWithHive(filePath, detectionType);
       default:
         throw new Error(`Unknown provider: ${providerName}`);
     }
@@ -155,6 +162,40 @@ class DeepfakeService {
   }
 
   /**
+   * Hive AI API integration
+   */
+  async detectWithHive(filePath, detectionType) {
+    const config = this.providers.hive;
+    
+    const formData = new FormData();
+    formData.append('media', fs.createReadStream(filePath));
+
+    // Hive AI supports both image and video deepfake detection
+    let endpoint;
+    if (detectionType === 'image') {
+      endpoint = '/task/sync';
+    } else if (detectionType === 'video') {
+      endpoint = '/task/sync';
+    } else {
+      throw new Error('Hive AI does not support audio deepfake detection');
+    }
+
+    const response = await axios.post(`${config.baseUrl}${endpoint}`, formData, {
+      headers: {
+        'Authorization': `Token ${config.apiKey}`,
+        ...formData.getHeaders()
+      },
+      timeout: 60000 // Hive AI might take longer for video processing
+    });
+
+    if (response.data.status?.length === 0 || !response.data.status) {
+      throw new Error(`Hive AI error: ${response.data.message || 'Analysis failed'}`);
+    }
+
+    return this.formatHiveResult(response.data, detectionType);
+  }
+
+  /**
    * Format Sightengine response
    */
   formatSightengineResult(deepfakeScore, detectionType) {
@@ -213,6 +254,55 @@ class DeepfakeService {
       classification,
       confidence,
       details: data.details || this.getGenericDetails(classification, detectionType)
+    };
+  }
+
+  /**
+   * Format Hive AI response
+   */
+  formatHiveResult(data, detectionType) {
+    // Hive AI returns status array with different model results
+    const status = data.status[0] || {};
+    const response = status.response || {};
+    
+    // Look for AI-generated content detection
+    const outputs = response.output || [];
+    let aiGenerated = false;
+    let confidence = 0;
+    let details = [];
+
+    // Check for AI-generated image/video detection
+    outputs.forEach(output => {
+      if (output.class === 'ai_generated_image' || output.class === 'ai_generated_video') {
+        if (output.score > confidence) {
+          confidence = output.score;
+          aiGenerated = true;
+        }
+      }
+    });
+
+    // Determine classification
+    let classification;
+    if (aiGenerated && confidence > 0.7) {
+      classification = 'deepfake';
+      details = this.getDeepfakeDetails(detectionType, 'high');
+    } else if (aiGenerated && confidence > 0.3) {
+      classification = 'suspicious';
+      details = this.getDeepfakeDetails(detectionType, 'medium');
+    } else {
+      classification = 'authentic';
+      details = this.getAuthenticDetails(detectionType);
+    }
+
+    // Add Hive AI specific details
+    if (outputs.length > 0) {
+      details.unshift(`Hive AI analysis: ${outputs.length} detection model(s) used`);
+    }
+
+    return {
+      classification,
+      confidence,
+      details
     };
   }
 

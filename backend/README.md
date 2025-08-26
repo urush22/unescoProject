@@ -4,7 +4,7 @@ A robust Node.js/Express backend API for deepfake detection that integrates with
 
 ## Features
 
-- 🛡️ **Multi-provider Support**: Integrates with Sightengine, DeepWare, and Sensity APIs
+- 🛡️ **Multi-provider Support**: Integrates with Sightengine, DeepWare, Sensity, and Hive AI APIs
 - 📁 **Secure File Upload**: Comprehensive file validation and automatic cleanup
 - 🎯 **Multi-media Detection**: Supports images, videos, and audio files
 - 🔒 **Security First**: Rate limiting, CORS protection, and file security validation
@@ -43,6 +43,7 @@ SIGHTENGINE_API_SECRET=your_api_secret
 # Optional alternative providers
 DEEPWARE_API_KEY=your_deepware_api_key
 SENSITY_API_KEY=your_sensity_api_key
+HIVE_API_KEY=your_hive_api_key
 ```
 
 ### 3. Start the Server
