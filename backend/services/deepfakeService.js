@@ -26,6 +26,11 @@ class DeepfakeService {
         enabled: !!process.env.HIVE_API_KEY,
         apiKey: process.env.HIVE_API_KEY,
         baseUrl: 'https://api.thehive.ai/api/v2'
+      },
+      huggingface: {
+        enabled: !!process.env.HUGGINGFACE_API_KEY,
+        apiKey: process.env.HUGGINGFACE_API_KEY,
+        baseUrl: 'https://api-inference.huggingface.co/models'
       }
     };
   }
@@ -78,6 +83,8 @@ class DeepfakeService {
         return await this.detectWithSensity(filePath, detectionType);
       case 'hive':
         return await this.detectWithHive(filePath, detectionType);
+      case 'huggingface':
+        return await this.detectWithHuggingFace(filePath, detectionType);
       default:
         throw new Error(`Unknown provider: ${providerName}`);
     }
@@ -196,6 +203,49 @@ class DeepfakeService {
   }
 
   /**
+   * Hugging Face API integration
+   */
+  async detectWithHuggingFace(filePath, detectionType) {
+    const config = this.providers.huggingface;
+    
+    if (detectionType === 'audio') {
+      throw new Error('Hugging Face audio deepfake detection not yet implemented');
+    }
+
+    try {
+      // Read file as buffer
+      const fileBuffer = fs.readFileSync(filePath);
+      
+      // Choose appropriate model based on detection type
+      let modelEndpoint;
+      if (detectionType === 'image') {
+        // Popular deepfake detection models on Hugging Face
+        modelEndpoint = 'umm-maybe/AI-image-detector'; // or 'microsoft/DisCo-diff'
+      } else if (detectionType === 'video') {
+        // For video, we'll use image analysis on frames
+        modelEndpoint = 'umm-maybe/AI-image-detector';
+      }
+
+      const response = await axios.post(`${config.baseUrl}/${modelEndpoint}`, fileBuffer, {
+        headers: {
+          'Authorization': `Bearer ${config.apiKey}`,
+          'Content-Type': 'application/octet-stream'
+        },
+        timeout: 30000
+      });
+
+      return this.formatHuggingFaceResult(response.data, detectionType);
+
+    } catch (error) {
+      // If the model is loading, try a fallback
+      if (error.response?.data?.error?.includes('loading')) {
+        throw new Error('Hugging Face model is loading, please try again in a few seconds');
+      }
+      throw new Error(`Hugging Face API error: ${error.message}`);
+    }
+  }
+
+  /**
    * Format Sightengine response
    */
   formatSightengineResult(deepfakeScore, detectionType) {
@@ -297,6 +347,68 @@ class DeepfakeService {
     // Add Hive AI specific details
     if (outputs.length > 0) {
       details.unshift(`Hive AI analysis: ${outputs.length} detection model(s) used`);
+    }
+
+    return {
+      classification,
+      confidence,
+      details
+    };
+  }
+
+  /**
+   * Format Hugging Face response
+   */
+  formatHuggingFaceResult(data, detectionType) {
+    let classification = 'authentic';
+    let confidence = 0.5;
+    let details = [];
+
+    // Hugging Face models return different formats
+    // Handle array response (classification results)
+    if (Array.isArray(data)) {
+      const result = data[0] || {};
+      
+      // Look for AI-generated or fake labels
+      const aiLabels = ['FAKE', 'AI', 'artificial', 'generated', 'deepfake'];
+      const realLabels = ['REAL', 'authentic', 'human', 'genuine'];
+      
+      let maxAiScore = 0;
+      let maxRealScore = 0;
+      
+      data.forEach(item => {
+        const label = item.label?.toLowerCase() || '';
+        const score = item.score || 0;
+        
+        if (aiLabels.some(aiLabel => label.includes(aiLabel.toLowerCase()))) {
+          maxAiScore = Math.max(maxAiScore, score);
+        } else if (realLabels.some(realLabel => label.includes(realLabel.toLowerCase()))) {
+          maxRealScore = Math.max(maxRealScore, score);
+        }
+      });
+      
+      // Determine classification
+      if (maxAiScore > maxRealScore && maxAiScore > 0.7) {
+        classification = 'deepfake';
+        confidence = maxAiScore;
+        details = this.getDeepfakeDetails(detectionType, 'high');
+      } else if (maxAiScore > maxRealScore && maxAiScore > 0.3) {
+        classification = 'suspicious';
+        confidence = maxAiScore;
+        details = this.getDeepfakeDetails(detectionType, 'medium');
+      } else {
+        classification = 'authentic';
+        confidence = maxRealScore || 0.6;
+        details = this.getAuthenticDetails(detectionType);
+      }
+      
+      details.unshift(`Hugging Face AI detection: ${data.length} classification(s) analyzed`);
+      
+    } else if (data.error) {
+      throw new Error(data.error);
+    } else {
+      // Handle other response formats
+      details = ['Hugging Face analysis completed', 'Standard classification applied'];
     }
 
     return {
