@@ -316,8 +316,11 @@ export default function DeepfakeDetectionPage() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
                   <div className="text-center">
-                    <h4 className="font-semibold text-foreground mb-2">Confidence Level</h4>
+                    <h4 className="font-semibold text-foreground mb-2">Deepfake Likelihood</h4>
                     <div className="text-3xl font-bold text-primary">{analysisResult.confidence}%</div>
+                    <div className="text-sm text-muted-foreground mt-1">
+                      Authenticity: {Math.max(0, 100 - analysisResult.confidence)}%
+                    </div>
                   </div>
                   <div className="text-center">
                     <h4 className="font-semibold text-foreground mb-2">Processing Time</h4>
