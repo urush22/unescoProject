@@ -307,11 +307,22 @@ export default function DeepfakeDetectionPage() {
             <Card className="mb-8">
               <CardContent className="p-8">
                 <div className="text-center mb-8">
-                  <div className="flex items-center justify-center mb-4">{getResultIcon(analysisResult.result)}</div>
-                  <h3 className="text-2xl font-bold text-foreground mb-2">Analysis Complete</h3>
-                  <Badge className={`text-lg px-4 py-2 ${getResultColor(analysisResult.result)}`}>
-                    {analysisResult.result.charAt(0).toUpperCase() + analysisResult.result.slice(1)}
-                  </Badge>
+                  {(() => {
+                    const derivedResult: DetectionResult = analysisResult.confidence > 70
+                      ? "deepfake"
+                      : analysisResult.confidence > 30
+                      ? "suspicious"
+                      : "authentic";
+                    return (
+                      <>
+                        <div className="flex items-center justify-center mb-4">{getResultIcon(derivedResult)}</div>
+                        <h3 className="text-2xl font-bold text-foreground mb-2">Analysis Complete</h3>
+                        <Badge className={`text-lg px-4 py-2 ${getResultColor(derivedResult)}`}>
+                          {derivedResult.charAt(0).toUpperCase() + derivedResult.slice(1)}
+                        </Badge>
+                      </>
+                    );
+                  })()}
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
