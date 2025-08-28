@@ -1,0 +1,36 @@
+# Core FastAPI dependencies
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+python-multipart==0.0.9
+
+# Data processing and scientific computing
+numpy==1.26.4
+scipy==1.13.0
+
+# Image processing
+opencv-python==4.10.0.84
+Pillow==10.4.0
+
+# Audio processing
+librosa==0.10.2
+soundfile==0.12.1
+
+# Machine Learning frameworks (choose one based on your preference)
+# TensorFlow/Keras
+tensorflow==2.15.0
+# OR PyTorch
+# torch==2.3.1
+# torchvision==0.18.1
+# torchaudio==2.3.1
+
+# ONNX Runtime (for optimized inference)
+onnxruntime==1.18.1
+
+# Additional utilities
+requests==2.32.3
+python-dotenv==1.0.1
+
+# Development dependencies (optional)
+pytest==8.0.0
+black==24.2.0
+flake8==7.0.0
