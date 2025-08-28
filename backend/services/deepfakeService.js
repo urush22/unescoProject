@@ -6,6 +6,10 @@ const path = require('path');
 class DeepfakeService {
   constructor() {
     this.providers = {
+      local: {
+        enabled: !!process.env.LOCAL_DETECT_URL,
+        baseUrl: process.env.LOCAL_DETECT_URL
+      },
       sightengine: {
         enabled: !!(process.env.SIGHTENGINE_API_USER && process.env.SIGHTENGINE_API_SECRET),
         apiUser: process.env.SIGHTENGINE_API_USER,
@@ -65,6 +69,8 @@ class DeepfakeService {
    */
   async detectWithProvider(providerName, filePath, detectionType) {
     switch (providerName) {
+      case 'local':
+        return await this.detectWithLocal(filePath, detectionType);
       case 'sightengine':
         return await this.detectWithSightengine(filePath, detectionType);
       case 'deepware':
@@ -74,6 +80,49 @@ class DeepfakeService {
       default:
         throw new Error(`Unknown provider: ${providerName}`);
     }
+  }
+
+  /**
+   * Local Python microservice integration
+   */
+  async detectWithLocal(filePath, detectionType) {
+    const config = this.providers.local;
+    
+    const formData = new FormData();
+    formData.append('file', fs.createReadStream(filePath));
+    formData.append('detectionType', detectionType);
+
+    const response = await axios.post(`${config.baseUrl}/detect`, formData, {
+      headers: {
+        ...formData.getHeaders()
+      },
+      timeout: 120000 // 2 minutes for local processing
+    });
+
+    if (!response.data || !response.data.result) {
+      throw new Error('Local detector error: invalid response');
+    }
+
+    // Map local service response to standard format
+    const confidence = response.data.confidence || 0;
+    let classification, details;
+
+    if (confidence > 0.7) {
+      classification = 'deepfake';
+      details = this.getDeepfakeDetails(detectionType, 'high');
+    } else if (confidence > 0.3) {
+      classification = 'suspicious';
+      details = this.getDeepfakeDetails(detectionType, 'medium');
+    } else {
+      classification = 'authentic';
+      details = this.getAuthenticDetails(detectionType);
+    }
+
+    return {
+      classification,
+      confidence,
+      details: response.data.details || details
+    };
   }
 
   /**
