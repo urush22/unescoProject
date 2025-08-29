@@ -1,11 +1,11 @@
 #!/bin/bash
 
-# Deepfake Detection Setup Script
-# This script sets up the complete deepfake detection system
+# Deepfake Detection Setup Script (Local Only - No Docker)
+# This script sets up the complete deepfake detection system locally
 
 set -e
 
-echo "🚀 Setting up Deepfake Detection System..."
+echo "🚀 Setting up Deepfake Detection System (Local Only)..."
 
 # Colors for output
 RED='\033[0;31m'
@@ -31,51 +31,34 @@ print_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
-# Check if Docker is installed
-check_docker() {
-    if ! command -v docker &> /dev/null; then
-        print_error "Docker is not installed. Please install Docker first."
-        exit 1
-    fi
-    
-    if ! command -v docker-compose &> /dev/null; then
-        print_error "Docker Compose is not installed. Please install Docker Compose first."
-        exit 1
-    fi
-    
-    print_success "Docker and Docker Compose are available"
-}
-
 # Check if Node.js is installed
 check_node() {
     if ! command -v node &> /dev/null; then
-        print_warning "Node.js is not installed. Will use Docker instead."
-        return 1
+        print_error "Node.js is not installed. Please install Node.js 18+ and retry."
+        exit 1
     fi
     
     if ! command -v npm &> /dev/null; then
-        print_warning "npm is not installed. Will use Docker instead."
-        return 1
+        print_error "npm is not installed. Please install npm and retry."
+        exit 1
     fi
     
     print_success "Node.js and npm are available"
-    return 0
 }
 
 # Check if Python is installed
 check_python() {
     if ! command -v python3 &> /dev/null; then
-        print_warning "Python 3 is not installed. Will use Docker instead."
-        return 1
+        print_error "Python 3 is not installed. Please install Python 3.11+ and retry."
+        exit 1
     fi
     
     if ! command -v pip3 &> /dev/null; then
-        print_warning "pip3 is not installed. Will use Docker instead."
-        return 1
+        print_error "pip3 is not installed. Please install pip3 and retry."
+        exit 1
     fi
     
     print_success "Python 3 and pip3 are available"
-    return 0
 }
 
 # Setup Python environment
@@ -84,8 +67,12 @@ setup_python() {
     
     cd deepfake-detector
     
-    # Create virtual environment
-    python3 -m venv venv
+    # Create virtual environment if not exists
+    if [ ! -d "venv" ]; then
+        python3 -m venv venv
+    fi
+    
+    # Activate venv
     source venv/bin/activate
     
     # Install dependencies
@@ -105,7 +92,7 @@ setup_node() {
     npm install
     cd ..
     
-    # Install frontend dependencies
+    # Install frontend dependencies (root)
     npm install
     
     print_success "Node.js environment setup complete"
@@ -145,62 +132,35 @@ create_directories() {
     print_success "Directories created"
 }
 
-# Setup with Docker
-setup_docker() {
-    print_status "Setting up with Docker..."
+# Start services locally
+start_local() {
+    print_status "Starting local services (3 terminals recommended)..."
     
-    # Build and start services
-    docker-compose up -d --build
-    
-    print_success "Docker services started"
-    print_status "Services are running on:"
-    echo "  - Frontend: http://localhost:3000"
-    echo "  - Backend: http://localhost:5000"
-    echo "  - Detector: http://localhost:8001"
-}
-
-# Setup without Docker
-setup_local() {
-    print_status "Setting up local development environment..."
-    
-    # Start Python service in background
-    cd deepfake-detector
-    source venv/bin/activate
-    python main.py &
-    DETECTOR_PID=$!
-    cd ..
-    
-    # Start backend service in background
-    cd backend
-    npm start &
-    BACKEND_PID=$!
-    cd ..
-    
-    # Start frontend service in background
-    npm run dev &
-    FRONTEND_PID=$!
-    
-    print_success "Local services started"
-    print_status "Services are running on:"
-    echo "  - Frontend: http://localhost:3000"
-    echo "  - Backend: http://localhost:5000"
-    echo "  - Detector: http://localhost:8001"
     echo ""
-    print_warning "Press Ctrl+C to stop all services"
-    
-    # Wait for interrupt
-    trap "kill $DETECTOR_PID $BACKEND_PID $FRONTEND_PID; exit" INT
-    wait
+    echo "Open three terminals and run the following commands:" 
+    echo ""
+    echo "Terminal 1 - Python Detector Service:"
+    echo "  cd deepfake-detector && source venv/bin/activate && python main.py"
+    echo ""
+    echo "Terminal 2 - Backend API:"
+    echo "  cd backend && npm start"
+    echo ""
+    echo "Terminal 3 - Frontend Web App:"
+    echo "  npm run dev"
+    echo ""
+    print_status "Service URLs:"
+    echo "  - Frontend: http://localhost:3000"
+    echo "  - Backend: http://localhost:5000"
+    echo "  - Detector: http://localhost:8001"
 }
 
 # Main setup function
 main() {
-    print_status "Starting setup..."
+    print_status "Starting local-only setup..."
     
     # Check prerequisites
-    check_docker
-    NODE_AVAILABLE=$(check_node)
-    PYTHON_AVAILABLE=$(check_python)
+    check_node
+    check_python
     
     # Create directories
     create_directories
@@ -208,19 +168,14 @@ main() {
     # Create environment files
     create_env_files
     
-    # Choose setup method
-    if [ "$NODE_AVAILABLE" = "0" ] && [ "$PYTHON_AVAILABLE" = "0" ]; then
-        print_status "Both Node.js and Python are available. Setting up local development environment..."
-        setup_python
-        setup_node
-        setup_local
-    else
-        print_status "Using Docker for setup..."
-        setup_docker
-    fi
+    # Setup environments
+    setup_python
+    setup_node
     
-    print_success "Setup complete! 🎉"
-    print_status "You can now access the deepfake detection system at http://localhost:3000"
+    # Start instructions
+    start_local
+    
+    print_success "Local setup complete! 🎉"
 }
 
 # Run main function
