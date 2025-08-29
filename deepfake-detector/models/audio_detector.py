@@ -7,6 +7,7 @@ import os
 import logging
 from typing import Optional
 import numpy as np
+import onnxruntime as ort
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +15,8 @@ class AudioDetector:
     """Audio deepfake detection using pre-trained models"""
     
     def __init__(self, model_path: Optional[str] = None):
-        self.model = None
+        self.session: Optional[ort.InferenceSession] = None
+        self.input_name: Optional[str] = None
         self.model_path = model_path
         self.is_loaded = False
         self.sample_rate = 16000  # Target sample rate for models
@@ -30,9 +32,8 @@ class AudioDetector:
         Returns:
             float: Deepfake probability (0.0 = authentic, 1.0 = deepfake)
         """
-        if not self.is_loaded:
-            logger.warning("Model not loaded, using mock prediction")
-            return 0.25  # Mock result for testing
+        if not self.is_loaded or self.session is None:
+            raise RuntimeError("Audio model not loaded. Set AUDIO_MODEL_PATH and restart.")
             
         try:
             # Preprocess audio
@@ -45,7 +46,7 @@ class AudioDetector:
             
         except Exception as e:
             logger.error(f"Audio prediction error: {e}")
-            return 0.5  # Default to suspicious on error
+            raise
     
     def _preprocess_audio(self, audio_path: str) -> np.ndarray:
         """Preprocess audio for model input"""
@@ -126,24 +127,18 @@ class AudioDetector:
     def _run_inference(self, audio: np.ndarray) -> float:
         """Run model inference on preprocessed audio"""
         try:
-            if self.model is None:
-                raise ValueError("Model not loaded")
+            if self.session is None or self.input_name is None:
+                raise ValueError("ONNX session not initialized")
             
             # Extract features
             features = self._extract_features(audio)
             
-            # This is a placeholder - replace with actual model inference
-            # For example, with TensorFlow/Keras:
-            # prediction = self.model.predict(features)
-            # return prediction[0][0]  # Assuming binary classification
-            
-            # For PyTorch:
-            # with torch.no_grad():
-            #     prediction = self.model(features)
-            #     return torch.sigmoid(prediction).item()
-            
-            # Mock inference for now
-            return 0.25
+            outputs = self.session.run(None, {self.input_name: features.astype(np.float32)})
+            score = outputs[0]
+            prob = float(np.array(score).squeeze())
+            if prob < 0.0 or prob > 1.0:
+                prob = 1.0 / (1.0 + np.exp(-prob))
+            return float(prob)
             
         except Exception as e:
             logger.error(f"Inference error: {e}")
@@ -181,15 +176,23 @@ def load_audio_model(model_path: Optional[str] = None) -> AudioDetector:
         AudioDetector instance
     """
     try:
+        if model_path is None:
+            model_path = os.getenv('AUDIO_MODEL_PATH')
+
         detector = AudioDetector(model_path)
-        
-        # Try to load different model types
-        if _try_load_aasist(detector, model_path):
-            logger.info("AASIST model loaded successfully")
-        elif _try_load_rawnet2(detector, model_path):
-            logger.info("RawNet2 model loaded successfully")
-        else:
-            logger.warning("No pre-trained audio models found, using mock detector")
+
+        if not model_path or not os.path.isfile(model_path):
+            raise FileNotFoundError("AUDIO_MODEL_PATH not set or file not found")
+
+        sess_opts = ort.SessionOptions()
+        provider = 'CUDAExecutionProvider' if os.getenv('USE_GPU', 'false').lower() == 'true' else 'CPUExecutionProvider'
+        try:
+            detector.session = ort.InferenceSession(model_path, sess_options=sess_opts, providers=[provider])
+        except Exception:
+            detector.session = ort.InferenceSession(model_path, sess_options=sess_opts, providers=['CPUExecutionProvider'])
+        detector.input_name = detector.session.get_inputs()[0].name
+        detector.is_loaded = True
+        logger.info(f"Audio ONNX model loaded from {model_path}")
         
         return detector
         
@@ -198,36 +201,8 @@ def load_audio_model(model_path: Optional[str] = None) -> AudioDetector:
         # Return mock detector for fallback
         return AudioDetector()
 
-def _try_load_aasist(detector: AudioDetector, model_path: Optional[str]) -> bool:
-    """Try to load AASIST model"""
-    try:
-        # AASIST specific loading logic
-        # This would typically involve:
-        # 1. Loading pre-trained weights
-        # 2. Setting up the model architecture
-        # 3. Configuring preprocessing for spectrogram input
-        
-        # For now, just mark as loaded
-        detector.is_loaded = True
-        return True
-        
-    except Exception as e:
-        logger.debug(f"AASIST loading failed: {e}")
-        return False
+def _try_load_aasist(*args, **kwargs) -> bool:
+    return False
 
-def _try_load_rawnet2(detector: AudioDetector, model_path: Optional[str]) -> bool:
-    """Try to load RawNet2 model"""
-    try:
-        # RawNet2 specific loading logic
-        # This would typically involve:
-        # 1. Loading pre-trained weights
-        # 2. Setting up the model architecture
-        # 3. Configuring preprocessing for raw audio input
-        
-        # For now, just mark as loaded
-        detector.is_loaded = True
-        return True
-        
-    except Exception as e:
-        logger.debug(f"RawNet2 loading failed: {e}")
-        return False
+def _try_load_rawnet2(*args, **kwargs) -> bool:
+    return False

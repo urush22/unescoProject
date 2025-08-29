@@ -84,6 +84,7 @@ router.post('/detect',
 
       // Process the file through deepfake detection service
       const result = await deepfakeService.detectDeepfake(req.file.path, detectionType);
+      console.log('[detect] provider=%s type=%s classification=%s confidence=%s', result.provider, detectionType, result.classification, result.confidence);
       
       // Calculate processing time
       const processingTime = ((Date.now() - startTime) / 1000).toFixed(2);

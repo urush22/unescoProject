@@ -113,12 +113,31 @@ async def detect_deepfake(
     try:
         logger.info(f"Processing {detectionType} file: {file.filename}")
         
-        # Run detection based on type
+        # Run detection based on type with extra logging
         if detectionType == "image":
             result = await detect_image(tmp_path)
         elif detectionType == "video":
+            # Log basic video stats
+            try:
+                import cv2
+                cap = cv2.VideoCapture(tmp_path)
+                total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                fps = cap.get(cv2.CAP_PROP_FPS) or 0
+                duration_s = (total_frames / fps) if fps > 0 else 0
+                logger.info(f"Video stats - frames: {total_frames}, fps: {fps:.2f}, duration_s: {duration_s:.2f}")
+                cap.release()
+            except Exception as e:
+                logger.warning(f"Video metadata logging failed: {e}")
             result = await detect_video(tmp_path)
         elif detectionType == "audio":
+            # Log basic audio stats
+            try:
+                import soundfile as sf
+                info = sf.info(tmp_path)
+                duration_s = info.frames / float(info.samplerate) if info.samplerate else 0
+                logger.info(f"Audio stats - samplerate: {info.samplerate}, channels: {info.channels}, duration_s: {duration_s:.2f}")
+            except Exception as e:
+                logger.warning(f"Audio metadata logging failed: {e}")
             result = await detect_audio(tmp_path)
         else:
             result = {

@@ -7,6 +7,7 @@ import os
 import logging
 from typing import Optional, List
 import numpy as np
+import onnxruntime as ort
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +15,8 @@ class VideoDetector:
     """Video deepfake detection using pre-trained models"""
     
     def __init__(self, model_path: Optional[str] = None):
-        self.model = None
+        self.session: Optional[ort.InferenceSession] = None
+        self.input_name: Optional[str] = None
         self.model_path = model_path
         self.is_loaded = False
         self.frame_rate = 1  # Frames per second to sample
@@ -29,17 +31,15 @@ class VideoDetector:
         Returns:
             float: Deepfake probability (0.0 = authentic, 1.0 = deepfake)
         """
-        if not self.is_loaded:
-            logger.warning("Model not loaded, using mock prediction")
-            return 0.65  # Mock result for testing
+        if not self.is_loaded or self.session is None:
+            raise RuntimeError("Video model not loaded. Set VIDEO_MODEL_PATH and restart.")
             
         try:
             # Extract frames from video
             frames = self._extract_frames(video_path)
             
             if not frames:
-                logger.warning("No frames extracted, using mock prediction")
-                return 0.5
+                raise RuntimeError("No frames extracted from video")
             
             # Run inference on frames
             predictions = []
@@ -92,13 +92,16 @@ class VideoDetector:
                     frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                     
                     # Resize frame for model input
-                    target_size = (224, 224)
-                    frame_resized = cv2.resize(frame_rgb, target_size)
+                    target_h = int(os.getenv('VIDEO_INPUT_H', '224'))
+                    target_w = int(os.getenv('VIDEO_INPUT_W', '224'))
+                    frame_resized = cv2.resize(frame_rgb, (target_w, target_h))
                     
                     # Normalize pixel values
                     frame_normalized = frame_resized.astype(np.float32) / 255.0
                     
-                    frames.append(frame_normalized)
+                    # CHW for NCHW models
+                    frame_chw = np.transpose(frame_normalized, (2, 0, 1))
+                    frames.append(frame_chw)
                     
                     # Limit number of frames to process
                     if len(frames) >= 30:  # Max 30 frames
@@ -118,11 +121,11 @@ class VideoDetector:
     def _run_inference_on_frame(self, frame: np.ndarray) -> float:
         """Run model inference on a single frame"""
         try:
-            if self.model is None:
-                raise ValueError("Model not loaded")
+            if self.session is None or self.input_name is None:
+                raise ValueError("ONNX session not initialized")
             
             # Add batch dimension
-            frame_batch = np.expand_dims(frame, axis=0)
+            frame_batch = np.expand_dims(frame, axis=0).astype(np.float32)
             
             # This is a placeholder - replace with actual model inference
             # For example, with TensorFlow/Keras:
@@ -134,9 +137,12 @@ class VideoDetector:
             #     prediction = self.model(frame_batch)
             #     return torch.sigmoid(prediction).item()
             
-            # Mock inference for now - return slightly varied results
-            import random
-            return 0.65 + random.uniform(-0.1, 0.1)
+            outputs = self.session.run(None, {self.input_name: frame_batch})
+            score = outputs[0]
+            prob = float(np.array(score).squeeze())
+            if prob < 0.0 or prob > 1.0:
+                prob = 1.0 / (1.0 + np.exp(-prob))
+            return float(prob)
             
         except Exception as e:
             logger.error(f"Frame inference error: {e}")
@@ -178,15 +184,23 @@ def load_video_model(model_path: Optional[str] = None) -> VideoDetector:
         VideoDetector instance
     """
     try:
+        if model_path is None:
+            model_path = os.getenv('VIDEO_MODEL_PATH')
+
         detector = VideoDetector(model_path)
-        
-        # Try to load different model types
-        if _try_load_lipforensics(detector, model_path):
-            logger.info("LipForensics model loaded successfully")
-        elif _try_load_xception_video(detector, model_path):
-            logger.info("XceptionNet video model loaded successfully")
-        else:
-            logger.warning("No pre-trained video models found, using mock detector")
+
+        if not model_path or not os.path.isfile(model_path):
+            raise FileNotFoundError("VIDEO_MODEL_PATH not set or file not found")
+
+        sess_opts = ort.SessionOptions()
+        provider = 'CUDAExecutionProvider' if os.getenv('USE_GPU', 'false').lower() == 'true' else 'CPUExecutionProvider'
+        try:
+            detector.session = ort.InferenceSession(model_path, sess_options=sess_opts, providers=[provider])
+        except Exception:
+            detector.session = ort.InferenceSession(model_path, sess_options=sess_opts, providers=['CPUExecutionProvider'])
+        detector.input_name = detector.session.get_inputs()[0].name
+        detector.is_loaded = True
+        logger.info(f"Video ONNX model loaded from {model_path}")
         
         return detector
         
@@ -195,36 +209,8 @@ def load_video_model(model_path: Optional[str] = None) -> VideoDetector:
         # Return mock detector for fallback
         return VideoDetector()
 
-def _try_load_lipforensics(detector: VideoDetector, model_path: Optional[str]) -> bool:
-    """Try to load LipForensics model"""
-    try:
-        # LipForensics specific loading logic
-        # This would typically involve:
-        # 1. Loading pre-trained weights
-        # 2. Setting up the model architecture
-        # 3. Configuring preprocessing for temporal analysis
-        
-        # For now, just mark as loaded
-        detector.is_loaded = True
-        return True
-        
-    except Exception as e:
-        logger.debug(f"LipForensics loading failed: {e}")
-        return False
+def _try_load_lipforensics(*args, **kwargs) -> bool:
+    return False
 
-def _try_load_xception_video(detector: VideoDetector, model_path: Optional[str]) -> bool:
-    """Try to load XceptionNet video model"""
-    try:
-        # XceptionNet video specific loading logic
-        # This would typically involve:
-        # 1. Loading pre-trained weights
-        # 2. Setting up the model architecture
-        # 3. Configuring preprocessing for frame-based analysis
-        
-        # For now, just mark as loaded
-        detector.is_loaded = True
-        return True
-        
-    except Exception as e:
-        logger.debug(f"XceptionNet video loading failed: {e}")
-        return False
+def _try_load_xception_video(*args, **kwargs) -> bool:
+    return False
