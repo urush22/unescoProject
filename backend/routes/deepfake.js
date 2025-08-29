@@ -96,7 +96,7 @@ router.post('/detect',
       const response = {
         success: true,
         result: result.classification, // 'authentic', 'deepfake', 'suspicious'
-        confidence: Math.round(result.confidence * 100),
+        confidence: Number((result.confidence * 100).toFixed(2)),
         details: result.details || [],
         processingTime: parseFloat(processingTime),
         metadata: {
