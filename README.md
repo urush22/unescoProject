@@ -9,7 +9,7 @@ A comprehensive web application for detecting deepfake manipulation in images, v
 - **Real-time Analysis**: Fast processing with detailed results and confidence scores
 - **User-Friendly Interface**: Modern, responsive web interface built with Next.js
 - **API-First Design**: RESTful API for easy integration with other services
-- **Scalable Architecture**: Microservices-based design with Docker support
+- **Scalable Architecture**: Microservices-based design (local-only setup; no Docker)
 
 ## Architecture
 
@@ -23,25 +23,10 @@ The system consists of three main components:
 
 ### Prerequisites
 
-- Docker and Docker Compose (recommended)
-- OR Node.js 18+ and Python 3.11+
+- Node.js 18+ and Python 3.11+
 - Git
 
-### Option 1: Docker Setup (Recommended)
-
-```bash
-# Clone the repository
-git clone <your-repo-url>
-cd <your-repo-name>
-
-# Make setup script executable
-chmod +x setup.sh
-
-# Run automated setup
-./setup.sh
-```
-
-### Option 2: Manual Setup
+### Local Setup (No Docker)
 
 ```bash
 # Clone the repository
@@ -149,7 +134,7 @@ See `deepfake-detector/models/README.md` for detailed integration instructions.
 ├── deepfake-detector/    # Python AI service
 │   └── models/          # Model integration modules
 ├── components/           # Reusable UI components
-└── docker-compose.yml   # Docker orchestration
+└── scripts/             # Local scripts and tooling
 ```
 
 ### Running Tests
@@ -191,15 +176,11 @@ cd deepfake-detector && flake8 .
 4. Use production-grade databases if needed
 5. Configure SSL/TLS certificates
 
-### Docker Production
+### Production Notes
 
-```bash
-# Build production images
-docker-compose -f docker-compose.prod.yml build
-
-# Deploy
-docker-compose -f docker-compose.prod.yml up -d
-```
+- Use a process manager (e.g., pm2) to run Node and the Python service
+- Configure systemd services on Linux servers for auto-restart
+- Put the frontend behind a reverse proxy (e.g., Nginx) with TLS
 
 ## Contributing
 
