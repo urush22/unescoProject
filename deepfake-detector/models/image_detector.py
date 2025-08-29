@@ -75,7 +75,6 @@ class ImageDetector:
                 image = (image - mean) / (std + 1e-8)
 
             # HWC -> CHW and add batch dimension (NCHW)
-            image = np.transpose(image, (0, 1, 2))  # HWC
             image = np.transpose(image, (2, 0, 1))  # CHW
             image = np.expand_dims(image, axis=0)   # NCHW
             

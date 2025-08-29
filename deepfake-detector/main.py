@@ -43,21 +43,24 @@ def load_models():
         from models.image_detector import load_image_model
         from models.video_detector import load_video_model
         from models.audio_detector import load_audio_model
-        
+
         logger.info("Loading image detection model...")
         image_model = load_image_model()
-        
+        logger.info(f"Image model loaded: {bool(image_model)}")
+
         logger.info("Loading video detection model...")
         video_model = load_video_model()
-        
+        logger.info(f"Video model loaded: {bool(video_model)}")
+
         logger.info("Loading audio detection model...")
         audio_model = load_audio_model()
-        
-        logger.info("All models loaded successfully!")
-        
+        logger.info(f"Audio model loaded: {bool(audio_model)}")
+
+        logger.info("Model loading complete")
+
     except Exception as e:
         logger.error(f"Error loading models: {e}")
-        logger.warning("Running with mock models for testing")
+        # Do not silently mock; keep None to fail fast during inference
 
 @app.on_event("startup")
 async def startup_event():
@@ -163,12 +166,9 @@ async def detect_deepfake(
 async def detect_image(file_path: str) -> dict:
     """Detect deepfakes in images"""
     try:
-        if image_model:
-            # Use actual model
-            confidence = await image_model.predict(file_path)
-        else:
-            # Mock detection for testing
-            confidence = 0.15  # Mock result
+        if not image_model:
+            raise RuntimeError("Image model not loaded. Set IMAGE_MODEL_PATH and restart detector.")
+        confidence = await image_model.predict(file_path)
         
         # Determine classification
         if confidence > 0.7:
@@ -196,11 +196,13 @@ async def detect_image(file_path: str) -> dict:
                 "Authentic content signatures"
             ]
         
-        return {
+        result_payload = {
             "result": result,
             "confidence": float(confidence),
             "details": details
         }
+        logger.info(f"Image result - result: {result}, confidence: {confidence:.4f}")
+        return result_payload
         
     except Exception as e:
         logger.error(f"Image detection error: {e}")
@@ -213,12 +215,9 @@ async def detect_image(file_path: str) -> dict:
 async def detect_video(file_path: str) -> dict:
     """Detect deepfakes in videos"""
     try:
-        if video_model:
-            # Use actual model
-            confidence = await video_model.predict(file_path)
-        else:
-            # Mock detection for testing
-            confidence = 0.65  # Mock result
+        if not video_model:
+            raise RuntimeError("Video model not loaded. Set VIDEO_MODEL_PATH and restart detector.")
+        confidence = await video_model.predict(file_path)
         
         # Determine classification
         if confidence > 0.7:
@@ -246,11 +245,13 @@ async def detect_video(file_path: str) -> dict:
                 "Authentic video signatures"
             ]
         
-        return {
+        result_payload = {
             "result": result,
             "confidence": float(confidence),
             "details": details
         }
+        logger.info(f"Video result - result: {result}, confidence: {confidence:.4f}")
+        return result_payload
         
     except Exception as e:
         logger.error(f"Video detection error: {e}")
@@ -263,12 +264,9 @@ async def detect_video(file_path: str) -> dict:
 async def detect_audio(file_path: str) -> dict:
     """Detect deepfakes in audio"""
     try:
-        if audio_model:
-            # Use actual model
-            confidence = await audio_model.predict(file_path)
-        else:
-            # Mock detection for testing
-            confidence = 0.25  # Mock result
+        if not audio_model:
+            raise RuntimeError("Audio model not loaded. Set AUDIO_MODEL_PATH and restart detector.")
+        confidence = await audio_model.predict(file_path)
         
         # Determine classification
         if confidence > 0.7:
@@ -296,11 +294,13 @@ async def detect_audio(file_path: str) -> dict:
                 "Authentic recording characteristics"
             ]
         
-        return {
+        result_payload = {
             "result": result,
             "confidence": float(confidence),
             "details": details
         }
+        logger.info(f"Audio result - result: {result}, confidence: {confidence:.4f}")
+        return result_payload
         
     except Exception as e:
         logger.error(f"Audio detection error: {e}")
