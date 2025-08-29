@@ -103,25 +103,20 @@ class DeepfakeService {
       throw new Error('Local detector error: invalid response');
     }
 
-    // Map local service response to standard format
-    const confidence = response.data.confidence || 0;
-    let classification, details;
+    // Use Python service's label directly; avoid re-thresholding here
+    const classification = response.data.result;
+    const confidence = typeof response.data.confidence === 'number' ? response.data.confidence : 0;
+    const details = Array.isArray(response.data.details) && response.data.details.length > 0
+      ? response.data.details
+      : this.getGenericDetails(classification, detectionType);
 
-    if (confidence > 0.7) {
-      classification = 'deepfake';
-      details = this.getDeepfakeDetails(detectionType, 'high');
-    } else if (confidence > 0.3) {
-      classification = 'suspicious';
-      details = this.getDeepfakeDetails(detectionType, 'medium');
-    } else {
-      classification = 'authentic';
-      details = this.getAuthenticDetails(detectionType);
-    }
+    // Debug logs for traceability
+    console.log('[local] detectionType:', detectionType, 'classification:', classification, 'confidence:', confidence);
 
     return {
       classification,
       confidence,
-      details: response.data.details || details
+      details
     };
   }
 
