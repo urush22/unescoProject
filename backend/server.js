@@ -6,16 +6,26 @@ const rateLimit = require('express-rate-limit');
 const dotenv = require('dotenv');
 const path = require('path');
 const fs = require('fs');
-
+const mongoose = require('mongoose');
+const adminRoutes = require('./routes/admin');
 // Load environment variables
 dotenv.config();
 
 // Import routes
 const deepfakeRoutes = require('./routes/deepfake');
 const healthRoutes = require('./routes/health');
+const authRoutes = require('./routes/auth'); // ✅ ADDED
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+
+// ✅ Connect to MongoDB
+mongoose.connect(process.env.MONGO_URI)
+  .then(() => console.log("✅ MongoDB Connected"))
+  .catch((err) => {
+    console.error("❌ DB Connection Error:", err.message);
+    process.exit(1);
+  });
 
 // Create necessary directories
 const uploadsDir = process.env.UPLOAD_PATH || './uploads';
@@ -39,8 +49,8 @@ app.use(compression());
 
 // Rate limiting
 const limiter = rateLimit({
-  windowMs: (process.env.RATE_LIMIT_WINDOW || 15) * 60 * 1000, // 15 minutes
-  max: process.env.RATE_LIMIT_MAX_REQUESTS || 100, // limit each IP to 100 requests per windowMs
+  windowMs: (process.env.RATE_LIMIT_WINDOW || 15) * 60 * 1000,
+  max: process.env.RATE_LIMIT_MAX_REQUESTS || 100,
   message: 'Too many requests from this IP, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
@@ -66,21 +76,21 @@ app.use((req, res, next) => {
   next();
 });
 
-// Routes
+// ✅ Routes
 app.use('/api/health', healthRoutes);
 app.use('/api/deepfake', deepfakeRoutes);
-
+app.use('/api/auth', authRoutes); // ✅ ADDED
+app.use('/api/admin', adminRoutes);
 // Error handling middleware
 app.use((error, req, res, next) => {
   console.error('Error:', error);
-  
-  // Clean up any uploaded files in case of error
+
   if (req.file) {
     fs.unlink(req.file.path, (err) => {
       if (err) console.error('Error deleting file:', err);
     });
   }
-  
+
   res.status(error.status || 500).json({
     success: false,
     message: error.message || 'Internal server error',
@@ -108,7 +118,7 @@ process.on('SIGINT', () => {
 });
 
 app.listen(PORT, () => {
-  console.log(`🚀 Deepfake Detection Backend running on port ${PORT}`);
-  console.log(`📝 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`🌐 CORS enabled for: ${process.env.FRONTEND_URL || 'http://localhost:3000'}`);
+  console.log(`Deepfake Detection Backend running on port ${PORT}`);
+  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`CORS enabled for: ${process.env.FRONTEND_URL || 'http://localhost:3000'}`);
 });
